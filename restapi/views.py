@@ -20,6 +20,24 @@ from restapi.models import *
 from restapi.serializers import *
 from restapi.custom_exception import *
 
+from enum import Enum, unique
+
+
+@unique
+class HttpStatusCode(Enum):
+
+    """ 
+    HttpStatusCode Enum
+
+    Example usage:
+        HttpStatusCode.OK.value  # 100
+        HttpStatusCode.INTERNAL_SERVER_ERROR.value  # 500
+    """
+
+    OK = 200
+    CREATED = 201
+    NO_CONTENT = 204
+    BAD_REQUEST = 400
 
 
 def index(_request):
@@ -29,11 +47,15 @@ def index(_request):
 @api_view(['POST'])
 def logout(request):
     request.user.auth_token.delete()
-    return Response(status=status.HTTP_204_NO_CONTENT)
+    return Response(status=HttpStatusCode.NO_CONTENT.value)
 
 
 @api_view(['GET'])
 def balance(request):
+    """
+    balance 
+    returns the user's balance
+    """
     user = request.user
     expenses = Expenses.objects.filter(users__in=user.expenses.all())
     final_balance = {}
@@ -49,10 +71,14 @@ def balance(request):
     final_balance = {k: v for k, v in final_balance.items() if v != 0}
 
     response = [{"user": k, "amount": int(v)} for k, v in final_balance.items()]
-    return Response(response, status=200)
+    return Response(response, status=HttpStatusCode.OK.value)
 
 
 def normalize(expense):
+    """
+    normalize
+    normalizes the requested expenses and returns
+    """
     user_balances = expense.users.all()
     dues = {}
     for user_balance in user_balances:
@@ -105,7 +131,7 @@ class group_view_set(ModelViewSet):
         group.save()
         group.members.add(user)
         serializer = self.get_serializer(group)
-        return Response(serializer.data, status=201)
+        return Response(serializer.data, status=HttpStatusCode.CREATED.value)
 
     @action(methods=['put'], detail=True)
     def members(self, request, pk=None):
@@ -122,7 +148,7 @@ class group_view_set(ModelViewSet):
             for user_id in removed_ids:
                 group.members.remove(user_id)
         group.save()
-        return Response(status=204)
+        return Response(status=HttpStatusCode.NO_CONTENT.value)
 
     @action(methods=['get'], detail=True)
     def expenses(self, _request, pk=None):
@@ -131,7 +157,7 @@ class group_view_set(ModelViewSet):
             raise UnauthorizedUserException()
         expenses = group.expenses_set
         serializer = ExpensesSerializer(expenses, many=True)
-        return Response(serializer.data, status=200)
+        return Response(serializer.data, status=HttpStatusCode.OK.value)
 
     @action(methods=['get'], detail=True)
     def balances(self, _request, pk=None):
@@ -161,7 +187,7 @@ class group_view_set(ModelViewSet):
             else:
                 end -= 1
 
-        return Response(balances, status=200)
+        return Response(balances, status=HttpStatusCode.OK.value)
 
 
 class expenses_view_set(ModelViewSet):
@@ -186,16 +212,16 @@ def logProcessor(request):
     log_files = data['logFiles']
     if num_threads <= 0 or num_threads > 30:
         return Response({"status": "failure", "reason": "Parallel Processing Count out of expected bounds"},
-                        status=status.HTTP_400_BAD_REQUEST)
+                        status=HttpStatusCode.BAD_REQUEST.value)
     if len(log_files) == 0:
         return Response({"status": "failure", "reason": "No log files provided in request"},
-                        status=status.HTTP_400_BAD_REQUEST)
+                        status=HttpStatusCode.BAD_REQUEST.value)
     logs = multiThreadedReader(urls=data['logFiles'], num_threads=data['parallelFileProcessingCount'])
     sorted_logs = sort_by_time_stamp(logs)
     cleaned = transform(sorted_logs)
     data = aggregate(cleaned)
     response = response_format(data)
-    return Response({"response":response}, status=status.HTTP_200_OK)
+    return Response({"response":response}, status=HttpStatusCode.OK.value)
 
 def sort_by_time_stamp(logs):
     data = []
