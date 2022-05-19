@@ -21,7 +21,9 @@ from restapi.serializers import *
 from restapi.custom_exception import *
 
 from enum import Enum, unique
+import logging
 
+logging.basicConfig(level=logging.DEBUG, filename='logs.log', format='%(asctime)s: %(filename)s: %(message)s',level=logging.DEBUG)
 
 @unique
 class HttpStatusCode(Enum):
@@ -46,6 +48,7 @@ def index(_request):
 
 @api_view(['POST'])
 def logout(request):
+    logging.info(f'{request.user.user_name} is logging out')
     request.user.auth_token.delete()
     return Response(status=HttpStatusCode.NO_CONTENT.value)
 
@@ -56,6 +59,7 @@ def balance(request):
     balance 
     returns the user's balance
     """
+    logging.info(f'{request.user.user_name} has requested for his balance')
     user = request.user
     expenses = Expenses.objects.filter(users__in=user.expenses.all())
     final_balance = {}
@@ -128,6 +132,7 @@ class group_view_set(ModelViewSet):
         user = self.request.user
         data = self.request.data
         group = Groups(**data)
+        logging.info(f'Adding user {user.user_name} to the group {group.name}')
         group.save()
         group.members.add(user)
         serializer = self.get_serializer(group)
@@ -228,6 +233,7 @@ def sort_by_time_stamp(logs):
     for log in logs:
         data.append(log.split(" "))
     # print(data)
+    logging.DEBUG(data)
     data = sorted(data, key=lambda elem: elem[1])
     return data
 
