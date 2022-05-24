@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from rest_framework.authtoken import views
 
 from restapi.views import UserViewSet, CategoryViewSet, GroupViewSet, ExpensesViewSet, index, logout, balance, \
-    logProcessor
+    log_processor
 
 
 router = DefaultRouter()
