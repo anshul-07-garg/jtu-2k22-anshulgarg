@@ -17,26 +17,9 @@ from restapi.models import *
 from restapi.serializers import *
 from restapi.custom_exception import *
 
-from enum import Enum, unique
 import logging
 
 logging.basicConfig(level=logging.DEBUG, filename='logs.log', format='%(asctime)s: %(filename)s: %(message)s',level=logging.DEBUG)
-
-@unique
-class HttpStatusCode(Enum):
-
-    """ 
-    HttpStatusCode Enum
-
-    Example usage:
-        HttpStatusCode.OK.value  # 100
-        HttpStatusCode.INTERNAL_SERVER_ERROR.value  # 500
-    """
-
-    OK = 200
-    CREATED = 201
-    NO_CONTENT = 204
-    BAD_REQUEST = 400
 
 
 def index(_request):
@@ -47,7 +30,7 @@ def index(_request):
 def logout(request):
     logging.info(f'{request.user.user_name} is logging out')
     request.user.auth_token.delete()
-    return Response(status=HttpStatusCode.NO_CONTENT.value)
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @api_view(['GET'])
@@ -72,7 +55,7 @@ def balance(request):
     final_balance = {k: v for k, v in final_balance.items() if v != 0}
 
     response = [{"user": k, "amount": int(v)} for k, v in final_balance.items()]
-    return Response(response, status=HttpStatusCode.OK.value)
+    return Response(response, status=status.HTTP_200_OK)
 
 
 def normalize(expense):
@@ -102,19 +85,19 @@ def normalize(expense):
     return balances
 
 
-class USER_VIEW_SET(ModelViewSet):
+class UserViewSet(ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = (AllowAny,)
 
 
-class CATEGORY_VIEW_SET(ModelViewSet):
+class CategoryViewSet(ModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     http_method_names = ['get', 'post']
 
 
-class GROUP_VIEW_SET(ModelViewSet):
+class GroupViewSet(ModelViewSet):
     queryset = Groups.objects.all()
     serializer_class = GroupSerializer
 
@@ -133,7 +116,7 @@ class GROUP_VIEW_SET(ModelViewSet):
         group.save()
         group.members.add(user)
         serializer = self.get_serializer(group)
-        return Response(serializer.data, status=HttpStatusCode.CREATED.value)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(methods=['put'], detail=True)
     def members(self, request, pk=None):
@@ -150,7 +133,7 @@ class GROUP_VIEW_SET(ModelViewSet):
             for user_id in removed_ids:
                 group.members.remove(user_id)
         group.save()
-        return Response(status=HttpStatusCode.NO_CONTENT.value)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(methods=['get'], detail=True)
     def expenses(self, _request, pk=None):
@@ -159,7 +142,7 @@ class GROUP_VIEW_SET(ModelViewSet):
             raise UnauthorizedUserException()
         expenses = group.expenses_set
         serializer = ExpensesSerializer(expenses, many=True)
-        return Response(serializer.data, status=HttpStatusCode.OK.value)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     @action(methods=['get'], detail=True)
     def balances(self, _request, pk=None):
@@ -189,10 +172,10 @@ class GROUP_VIEW_SET(ModelViewSet):
             else:
                 end -= 1
 
-        return Response(balances, status=HttpStatusCode.OK.value)
+        return Response(balances, status=status.HTTP_200_OK)
 
 
-class EXPENSES_VIEW_SET(ModelViewSet):
+class ExpensesViewSet(ModelViewSet):
     queryset = Expenses.objects.all()
     serializer_class = ExpensesSerializer
 
@@ -208,22 +191,26 @@ class EXPENSES_VIEW_SET(ModelViewSet):
 @api_view(['post'])
 @authentication_classes([])
 @permission_classes([])
-def logProcessor(request):
+def log_processor(request):
     data = request.data
-    num_threads = data['parallelFileProcessingCount']
-    log_files = data['logFiles']
-    if num_threads <= 0 or num_threads > 30:
-        return Response({"status": "failure", "reason": "Parallel Processing Count out of expected bounds"},
-                        status=HttpStatusCode.BAD_REQUEST.value)
-    if len(log_files) == 0:
-        return Response({"status": "failure", "reason": "No log files provided in request"},
-                        status=HttpStatusCode.BAD_REQUEST.value)
-    logs = multiThreadedReader(urls=data['logFiles'], num_threads=data['parallelFileProcessingCount'])
+    try:
+        num_threads = data['parallelFileProcessingCount']
+        log_files = data['logFiles']
+        if num_threads <= 0 or num_threads > MAX_THREADS:
+            return Response({"status": "failure", "reason": "Parallel Processing Count out of expected bounds"},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if len(log_files) == 0:
+            return Response({"status": "failure", "reason": "No log files provided in request"},
+                            status=status.HTTP_400_BAD_REQUEST)
+    except:
+        return Response(response, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    logs = multi_threaded_reader(urls=data['logFiles'], num_threads=data['parallelFileProcessingCount'])
     sorted_logs = sort_by_time_stamp(logs)
     cleaned = transform(sorted_logs)
     data = aggregate(cleaned)
     response = response_format(data)
-    return Response({"response":response}, status=HttpStatusCode.OK.value)
+    logger.info('log processing executed successfully.')
+    return Response({"response":response}, status=status.HTTP_200_OK)
 
 def sort_by_time_stamp(logs):
     data = []
